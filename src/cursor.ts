@@ -175,8 +175,10 @@ async function applyCursorHighlight(
             };
           }
 
-          // Click ripple effect
-          if (clickRipple) {
+          // Click feedback. In click mode the locator circle is the click
+          // feedback, so it fires regardless of clickRipple; the flag only
+          // toggles the continuous mode's expanding ripple.
+          if (clickRipple || mode === 'click') {
             const onClick = (e: MouseEvent) => {
               if (mode === 'click') {
                 locate(e.clientX, e.clientY);

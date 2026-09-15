@@ -224,4 +224,30 @@ describeCursorE2E('E2E: SVG pointer plus ring', () => {
       await browser.close();
     }
   }, 30_000);
+
+  it('still marks clicks in click mode when clickRipple is false', async () => {
+    const browser = await chromium.launch({ headless: true });
+    try {
+      const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+      await page.setContent('<button style="position:fixed;left:400px;top:240px;width:240px;height:120px">Click</button>');
+      await cursorHighlight(page, { mode: 'click', clickRipple: false });
+      const cursor = await createHumanCursor(page);
+      const circle = page.locator('[data-argo-cursor="ripple"]');
+      await circle.waitFor({ state: 'detached' }); // the appearance circle
+      // clickRipple toggles the continuous-mode expanding ripple; in click
+      // mode the locator circle IS the click feedback and must survive.
+      await cursor.click(page.getByRole('button'), { durationMs: 0, afterMs: 0 });
+      expect(await circle.count()).toBe(1);
+
+      // Continuous mode with clickRipple:false keeps producing no ripple.
+      await resetCursor(page);
+      await cursorHighlight(page, { pulse: false, clickRipple: false });
+      await page.mouse.click(410, 250);
+      await page.waitForTimeout(50);
+      expect(await circle.count()).toBe(0);
+      await cursor.dispose();
+    } finally {
+      await browser.close();
+    }
+  }, 30_000);
 });
