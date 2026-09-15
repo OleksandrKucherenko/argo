@@ -94,6 +94,17 @@ export async function createHumanCursor(page: Page, options: HumanCursorOptions 
   let disposed = false;
   let restorePending = Promise.resolve();
 
+  // Track the pointer through every real mouse move — ours, plain page.mouse
+  // calls, and the moves Playwright performs inside locator.click() — so the
+  // next glide starts where the pointer actually is, not where we last left it.
+  const originalMove = page.mouse.move;
+  const rawMove = originalMove.bind(page.mouse);
+  const trackedMove: typeof page.mouse.move = async (x, y, moveOptions) => {
+    await rawMove(x, y, moveOptions);
+    position = { x, y };
+  };
+  page.mouse.move = trackedMove;
+
   const install = async () => {
     if (disposed) return;
     await page.evaluate(({ id, styleId, size, position, visible }) => {
@@ -171,8 +182,24 @@ export async function createHumanCursor(page: Page, options: HumanCursorOptions 
       if (cursor) cursor.style.visibility = visible ? 'visible' : 'hidden';
     }, { id: CURSOR_ID, visible });
   };
-  const moveTo = async (target: Locator, opts: CursorMoveOptions = {}) => {
+  // The SVG glyph follows every real mousemove — including moves Playwright
+  // issues inside locator.click() that never cross the patched page.mouse —
+  // so reading it back reconciles our tracked position with browser reality.
+  const syncFromGlyph = async () => {
+    try {
+      const at = await page.evaluate(({ id }) => {
+        const glyph = document.getElementById(id);
+        if (!glyph) return null;
+        return { left: parseFloat(glyph.style.left), top: parseFloat(glyph.style.top) };
+      }, { id: CURSOR_ID });
+      if (at && Number.isFinite(at.left) && Number.isFinite(at.top)) position = { x: at.left, y: at.top };
+    } catch {
+      // Page closed mid-read: keep the locally tracked value.
+    }
+  };
+  const aimAt = async (target: Locator, opts: CursorMoveOptions) => {
     await setVisible(true);
+    await syncFromGlyph();
     await target.scrollIntoViewIfNeeded();
     const box = await target.boundingBox();
     if (!box) throw new Error('Cannot move the cursor to an invisible target.');
@@ -187,16 +214,21 @@ export async function createHumanCursor(page: Page, options: HumanCursorOptions 
       await page.mouse.move(point.x, point.y);
       await page.waitForTimeout(duration / (path.length - 1));
     }
-    position = destination;
+    return { box, point };
+  };
+  const moveTo = async (target: Locator, opts: CursorMoveOptions = {}) => {
+    await aimAt(target, opts);
   };
   return {
     moveTo,
     async click(target, opts = {}) {
-      await moveTo(target, opts);
+      const { box, point } = await aimAt(target, opts);
       await page.waitForTimeout(opts.dwellMs ?? 350);
-      await page.mouse.down();
-      await page.waitForTimeout(opts.holdMs ?? 90);
-      await page.mouse.up();
+      // Press through the locator so Playwright's actionability checks still
+      // run: if the layout shifted during the travel, Playwright waits for or
+      // retargets the element instead of clicking the stale absolute point.
+      await target.click({ position: { x: box.width * point.x, y: box.height * point.y }, delay: opts.holdMs ?? 90 });
+      await syncFromGlyph();
       await page.waitForTimeout(opts.afterMs ?? 350);
     },
     hide: () => setVisible(false),
@@ -204,6 +236,8 @@ export async function createHumanCursor(page: Page, options: HumanCursorOptions 
       if (disposed) return;
       disposed = true;
       page.off('domcontentloaded', onNavigation);
+      // Only unwrap our own tracker; a later cursor's wrapper stays on top.
+      if (page.mouse.move === trackedMove) page.mouse.move = rawMove;
       await restorePending;
       if (page.isClosed()) return;
       await page.evaluate(({ id, styleId }) => {
