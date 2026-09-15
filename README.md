@@ -162,9 +162,17 @@ For an **SVG mouse pointer with brief click feedback**, combine
 `createHumanCursor()` with `cursorHighlight(page, { mode: 'click' })`. The pointer
 travels alone along seeded curves and pauses before clicking. A circle
 contracts toward the pointer tip on its first mouse event, on a click, or when
-Control is released. It disappears after 700 ms and stays at the event position
-if the mouse moves away. Rapid triggers restart one circle. Both helpers
-survive navigation; `createHumanCursor()` adds no duplicate click feedback.
+Control or Meta is released alone — chorded with another key (`Control+A`,
+`Meta+C`) the key is an ordinary modifier and marks nothing. The press itself
+runs through Playwright's actionability-checked `locator.click()`, so if the
+layout shifts during the travel, Playwright retargets the element instead of
+clicking a stale point. The circle disappears after 700 ms and stays at the
+event position if the mouse moves away. Rapid triggers restart one circle.
+Locator circles render above overlays and below the SVG pointer; the
+continuous ring and its click ripple keep their historical layers beneath
+overlays, so recordings made before `mode: 'click'` render unchanged. Both
+helpers survive navigation; `createHumanCursor()` adds no duplicate click
+feedback.
 
 ```ts
 import { createHumanCursor, cursorHighlight, resetCursor } from '@argo-video/cli';
@@ -178,6 +186,8 @@ await resetCursor(page);
 ```
 
 `mode: 'continuous'` is the default for the existing persistent ring behavior.
+`clickRipple` toggles the continuous mode's expanding click ripple; in
+`mode: 'click'` the locator circle is the click feedback and fires regardless.
 Use one cursor instance across scenes. `cursor.hide()` hides the SVG until its
 next move; `cursor.dispose()` removes it and its navigation listener. The ring
 is independent and is removed with `resetCursor(page)`. `cursor.click(field)`
@@ -187,7 +197,7 @@ target bounding box respectively; `size` uses CSS pixels.
 
 Try the self-contained [pseudo-cursor demo](demos/pseudo-cursor.demo.ts):
 
-[Watch the recorded demo](videos/pseudo-cursor.mp4) (47 seconds, 1280×720).
+[Watch the recorded demo](https://github.com/user-attachments/assets/cea07d95-ed34-4692-8fde-0eeb4487c2f3) (47 seconds, 1280×720).
 
 ```bash
 npm run build
@@ -200,8 +210,9 @@ arrow), automatic restoration after a full page navigation,
 custom styling, and `resetCursor()` cleanup. Nested `withOverlay()` calls keep
 different zones visible together while the pseudo cursor clicks the page. The
 demo uses a local HTML fixture with on-screen explanations, so no app server, TTS engine,
-or API keys are needed. Chromium and ffmpeg must be installed. Output:
-`videos/pseudo-cursor.mp4`. Settings live in
+or API keys are needed. Chromium and ffmpeg must be installed. The run writes
+`videos/pseudo-cursor.mp4`, which stays gitignored — share recordings through
+an external link such as a GitHub attachment. Settings live in
 [`demos/pseudo-cursor.config.mjs`](demos/pseudo-cursor.config.mjs).
 
 > **Tip:** Use `browser: 'webkit'` for sharper video on macOS. Chromium has a [known video capture quality issue](https://github.com/microsoft/playwright/issues/31424). Set `deviceScaleFactor: 2` for retina-quality recordings (captured at 2x, downscaled with lanczos in export).

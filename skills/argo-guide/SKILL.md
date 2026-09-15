@@ -89,7 +89,7 @@ All camera effects are **non-blocking by default** (fire-and-forget safe). All a
 | `resetCamera(page)` | Clear all active camera effects |
 | `showConfetti(page, opts?)` | Confetti burst. `spread: 'burst'` (center-top fan) or `'rain'` (full-width fall). `emoji: '🎃'` or `emoji: ['🎃', '👻']` renders emoji instead of colored rectangles. |
 | `createHumanCursor(page, opts?)` | Visible SVG pointer with seeded travel, pre-click dwell, and navigation restoration. Await `cursor.moveTo()` / `cursor.click()`; clean up with `cursor.dispose()`. |
-| `cursorHighlight(page, opts?)` | Circle feedback, separate from the SVG pointer. `mode: 'click'` gives brief appearance/click/Control locator animations; the default `continuous` mode follows the mouse with a ring. Remove with `resetCursor(page)`. Use `video.cursorHighlight` for recording-wide automatic setup. |
+| `cursorHighlight(page, opts?)` | Circle feedback, separate from the SVG pointer. `mode: 'click'` gives brief appearance/click locator animations plus a locator on a bare Control or Meta release (chords like `Control+A` mark nothing); the default `continuous` mode follows the mouse with a ring. Remove with `resetCursor(page)`. Use `video.cursorHighlight` for recording-wide automatic setup. |
 
 Derive camera durations from `narration.durationFor()` so effects track voiceover timing:
 **Effect timing pattern**: Derive beat durations from `durationFor()` so effects stay synchronized with voiceover. Subtract any setup wait time before dividing:
@@ -116,7 +116,7 @@ For a visible pseudo mouse, use `createHumanCursor()` to draw the **SVG arrow**;
 `cursorHighlight()` alone only draws circle feedback. When the user wants a
 click/accessibility-style locator, set `video.cursorHighlight: { mode: 'click' }`:
 the arrow travels alone, and a circle briefly contracts toward its location on
-appearance, click, or Control release, then disappears after 700 ms. Reserve
+appearance, click, or a bare Control/Meta release (chords mark nothing), then disappears after 700 ms. Reserve
 the default continuous ring for requests that actually need persistent emphasis.
 
 Keep one cursor instance across scenes and use its real mouse movements so
@@ -544,7 +544,7 @@ Read these when you need deeper guidance on specific topics:
 
 - **`references/tts-engines.md`** — Engine selection, voice cloning, phonetic spelling per engine, cloud API keys
 - **`references/config-and-quality.md`** — Full config options, dark mode recording, Playwright tricks for demos, 4K export, browser quality
-- **`references/pseudo-cursor.md`** — SVG pointer vs circle feedback, brief click/appearance/Control locator, seeded motion, simultaneous overlays, cleanup, and recording checks
+- **`references/pseudo-cursor.md`** — SVG pointer vs circle feedback, brief click/appearance/Control-or-Meta locator, seeded motion, simultaneous overlays, cleanup, and recording checks
 - **`references/init-from-conversion.md`** — Converting Playwright tests, post-conversion LLM workflow, scene detection heuristics
 - **`references/compositions.md`** — `renderComposition` + Hyperframes block import, contract, when to mix authored motion with recordings, mixed-demo patterns, audio sidecar
 - **`examples/basic.demo.ts`** — Complete working demo script template

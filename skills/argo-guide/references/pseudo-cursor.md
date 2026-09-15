@@ -14,11 +14,13 @@ Argo build exports `createHumanCursor`; older releases only have the ring API.
 | Cursor positions for camera suggestions | `trackCursor(page, narration)`; telemetry does not draw a pointer |
 
 In `mode: 'click'`, the SVG travels alone. A circle contracts toward the event
-position on the first mouse event after highlight installation, a click, or
-Control-key release. It fades away and is removed after 700 ms. The circle
-stays at that position if the pointer moves away; rapid triggers restart one
-circle rather than stacking circles. This is browser-rendered locator feedback,
-not a change to the operating system's mouse settings.
+position on the first mouse event after highlight installation, a click, or a
+bare Control or Meta release — chorded with another key (`Control+A`, `Meta+C`)
+the key is an ordinary modifier and marks nothing. The circle fades away and is
+removed after 700 ms. It stays at that position if the pointer moves away;
+rapid triggers restart one circle rather than stacking circles. This is
+browser-rendered locator feedback, not a change to the operating system's
+mouse settings.
 
 The SVG's tip marks the actual click hotspot. `createHumanCursor()` produces
 real Playwright mouse events; `cursorHighlight()` listens to those events and
@@ -73,6 +75,9 @@ distance unless `durationMs` is supplied. A `steps` argument on bare
 
 `cursor.click(locator)` performs travel, pre-click dwell, press, release, and a
 short pause. It accepts `durationMs`, `target`, `dwellMs`, `holdMs`, and `afterMs`.
+The press itself goes through Playwright's `locator.click()`, so actionability
+checks still apply: if the layout shifted while the pointer traveled, Playwright
+waits for or retargets the element instead of clicking the stale point.
 `start` uses viewport fractions; movement `target` uses bounding-box fractions;
 `size` is SVG width in CSS pixels. The default target is inside the control's
 padding to reduce label obstruction. Use `cursor.click(field)` before
@@ -102,12 +107,15 @@ await withOverlay(page, 'interaction', {
 
 Import `withOverlay` from `@argo-video/cli`. Both cues use the same marked
 scene; the additional cue is inline rather than a second scenes manifest.
-The SVG and locator circles render above overlays and do not intercept input.
-Place captions away from controls and labels so the action remains readable.
+The SVG and locator circles render above overlays and do not intercept input;
+the continuous-mode ring keeps its historical layer beneath overlays. Place
+captions away from controls and labels so the action remains readable.
 
-To locate the pointer without a click, use `await page.keyboard.press('Control')`.
-A release triggers one circle; repeated releases restart it. No application
-click should occur during this demonstration.
+To locate the pointer without a click, use
+`await page.keyboard.press('Control')` (or `'Meta'` on macOS). A bare release
+triggers one circle; repeated releases restart it. A chord such as
+`Control+A` stays a normal modifier and marks nothing. No application click
+should occur during this demonstration.
 
 ## Navigation, cleanup, and recording checks
 
@@ -145,4 +153,6 @@ node bin/argo.js pipeline pseudo-cursor
 
 Chromium and ffmpeg are required. The HTML is served through Playwright route
 fulfillment and scenes omit narration text, so no app server, TTS engine, or
-API keys are needed. Output: `videos/pseudo-cursor.mp4`.
+API keys are needed. The run writes `videos/pseudo-cursor.mp4`, which stays
+gitignored — share recordings through an external link such as a GitHub
+attachment.
