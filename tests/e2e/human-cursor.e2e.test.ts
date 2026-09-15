@@ -125,7 +125,10 @@ describeCursorE2E('E2E: SVG pointer plus ring', () => {
             expect(geometry.tipX).toBeCloseTo(point.x, 0);
             expect(geometry.tipY).toBeCloseTo(point.y, 0);
             expect(geometry.pointerLayer).toBeGreaterThan(geometry.ringLayer);
-            expect(geometry.ringLayer).toBeGreaterThan(geometry.overlayLayer);
+            // Continuous mode keeps the ring on its legacy layer under
+            // overlays so existing recordings do not change (the click-mode
+            // locator circles are the layer that rides above overlays).
+            expect(geometry.ringLayer).toBeLessThan(geometry.overlayLayer);
           });
         });
       });
@@ -152,6 +155,73 @@ describeCursorE2E('E2E: SVG pointer plus ring', () => {
       await expect(cursor.moveTo(page.getByRole('button'))).rejects.toThrow('disposed');
     } finally {
       await browser?.close();
+    }
+  }, 30_000);
+
+  it('keeps the legacy continuous-mode layers and lifts only click-mode circles above overlays', async () => {
+    const browser = await chromium.launch({ headless: true });
+    try {
+      const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+      await page.setContent('<button style="position:fixed;left:400px;top:240px;width:240px;height:120px">Click</button>');
+      await cursorHighlight(page, { mode: 'click' });
+      const cursor = await createHumanCursor(page);
+      await withOverlay(page, 'layers', {
+        type: 'headline-card', title: 'Cover', placement: 'center',
+      }, async () => {
+        const layers = await page.evaluate(() => ({
+          overlay: Number(getComputedStyle(document.getElementById('argo-overlay-center')!).zIndex),
+          pointer: Number(getComputedStyle(document.getElementById('argo-human-cursor')!).zIndex),
+        }));
+        await cursor.click(page.getByRole('button'), { durationMs: 0, afterMs: 0 });
+        const circleLayer = await page.locator('[data-argo-cursor="ripple"]')
+          .evaluate(el => Number(getComputedStyle(el).zIndex));
+        expect(circleLayer).toBeGreaterThan(layers.overlay);
+        expect(layers.pointer).toBeGreaterThan(circleLayer);
+      });
+      await resetCursor(page);
+
+      // Continuous mode keeps the ring and click ripple on their pre-existing
+      // layers, so recordings made before mode:'click' render unchanged.
+      await cursorHighlight(page, { pulse: false });
+      const ringLayer = await page.locator('[data-argo-cursor="highlight"]')
+        .evaluate(el => Number(getComputedStyle(el).zIndex));
+      expect(ringLayer).toBe(99998);
+      await page.mouse.click(410, 250);
+      const rippleLayer = await page.locator('[data-argo-cursor="ripple"]')
+        .evaluate(el => Number(getComputedStyle(el).zIndex));
+      expect(rippleLayer).toBe(99997);
+      await cursor.dispose();
+    } finally {
+      await browser.close();
+    }
+  }, 30_000);
+
+  it('does not locate when Control or Meta is used as a chord modifier', async () => {
+    const browser = await chromium.launch({ headless: true });
+    try {
+      const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+      await page.setContent('<button style="position:fixed;left:400px;top:240px;width:240px;height:120px">Click</button>');
+      await cursorHighlight(page, { mode: 'click' });
+      const cursor = await createHumanCursor(page);
+      const circle = page.locator('[data-argo-cursor="ripple"]');
+      await cursor.moveTo(page.getByRole('button'), { durationMs: 0 });
+      await circle.waitFor({ state: 'detached' }); // the appearance circle
+      // Control+A and Meta+C are modifier chords, not pointer-locate gestures.
+      await page.keyboard.press('Control+A');
+      await page.waitForTimeout(50);
+      expect(await circle.count()).toBe(0);
+      // A bare Control or Meta release still marks the pointer position.
+      await page.keyboard.press('Control');
+      await circle.waitFor({ state: 'attached' });
+      await circle.waitFor({ state: 'detached' });
+      await page.keyboard.press('Meta+C');
+      await page.waitForTimeout(50);
+      expect(await circle.count()).toBe(0);
+      await page.keyboard.press('Meta');
+      await circle.waitFor({ state: 'attached' });
+      await cursor.dispose();
+    } finally {
+      await browser.close();
     }
   }, 30_000);
 });

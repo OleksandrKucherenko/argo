@@ -85,11 +85,15 @@ async function applyCursorHighlight(
           (document.head ?? document.documentElement).appendChild(style);
 
           // Create highlight element
+          // Layering: the continuous ring and its click ripple keep their
+          // historical layers (99998/99997, under overlays) so recordings
+          // made before mode:'click' render unchanged. Only the click-mode
+          // locator circles ride above overlays (below the SVG pointer).
           const dot = document.createElement('div');
           dot.id = id;
           dot.setAttribute(attr, 'highlight');
           dot.style.cssText = `
-            position: fixed; z-index: 2147483646; pointer-events: none;
+            position: fixed; z-index: ${mode === 'click' ? 2147483646 : 99998}; pointer-events: none;
             width: ${radius * 2}px; height: ${radius * 2}px;
             border-radius: 50%;
             border: 2px solid ${color};
@@ -140,13 +144,33 @@ async function applyCursorHighlight(
           };
 
           if (mode === 'click') {
-            const onKeyUp = (e: KeyboardEvent) => {
-              if (e.key === 'Control' && lastPoint) locate(lastPoint.x, lastPoint.y);
+            // Locate only on a bare Control or Meta release. While the key is
+            // down for a chord (Control+A, Meta+C) it is a modifier, so any
+            // other key activity suppresses the release mark. Meta covers the
+            // macOS shortcut key, which has no Control equivalent there.
+            const isLocateKey = (key: string) => key === 'Control' || key === 'Meta';
+            let locateKeyDown = false;
+            let usedAsModifier = false;
+            const onKeyDown = (e: KeyboardEvent) => {
+              if (isLocateKey(e.key)) {
+                locateKeyDown = true;
+                usedAsModifier = false;
+              } else if (locateKeyDown) {
+                usedAsModifier = true;
+              }
             };
+            const onKeyUp = (e: KeyboardEvent) => {
+              if (!isLocateKey(e.key)) return;
+              if (locateKeyDown && !usedAsModifier && lastPoint) locate(lastPoint.x, lastPoint.y);
+              locateKeyDown = false;
+              usedAsModifier = false;
+            };
+            document.addEventListener('keydown', onKeyDown, true);
             document.addEventListener('keyup', onKeyUp, true);
             const origCleanup = (dot as any).__cleanup;
             (dot as any).__cleanup = () => {
               origCleanup();
+              document.removeEventListener('keydown', onKeyDown, true);
               document.removeEventListener('keyup', onKeyUp, true);
             };
           }
@@ -161,7 +185,7 @@ async function applyCursorHighlight(
               const ripple = document.createElement('div');
               ripple.setAttribute(attr, 'ripple');
               ripple.style.cssText = `
-                position: fixed; z-index: 2147483645; pointer-events: none;
+                position: fixed; z-index: 99997; pointer-events: none;
                 width: ${radius * 2}px; height: ${radius * 2}px;
                 border-radius: 50%;
                 border: 2px solid ${color};
